@@ -171,18 +171,35 @@ def setup_hook():
     hook_dir = Path.home() / ".claude" / "hooks"
     hook_dir.mkdir(parents=True, exist_ok=True)
     
-    hook_script = hook_dir / "post-response"
+    hook_script = hook_dir / "stop"
     
+    # 创建 Stop hook 脚本
     script_content = f'''#!/bin/bash
-PROMPT="$1"
-RESPONSE="$2"
-DURATION="$3"
-WORKING_DIR="$PWD"
+# Claude Code Stop Hook - 在每次 Claude Code 完成响应后发送钉钉通知
 
-export PROMPT="$PROMPT"
-export RESPONSE="$RESPONSE" 
-export WORKING_DIR="$WORKING_DIR"
-export DURATION="$DURATION"
+# 从标准输入读取 Stop hook 的 JSON 数据
+input_data=$(cat)
+
+# 提取基本信息
+working_dir=$(echo "$input_data" | python3 -c "
+import json, sys
+try:
+    data = json.load(sys.stdin)
+    print(data.get('cwd', ''))
+except:
+    print('')
+")
+
+# 设置默认的通知信息
+prompt_text="Claude Code 响应完成"
+response_text="AI 任务已完成"
+duration="5.0"
+
+# 导出环境变量并调用通知脚本
+export PROMPT="$prompt_text"
+export RESPONSE="$response_text"
+export WORKING_DIR="$working_dir"
+export DURATION="$duration"
 
 exec python3 "{Path(__file__).parent}/cc-hook.py" send --prompt "$PROMPT" --response "$RESPONSE" --working-dir "$WORKING_DIR" --duration "$DURATION"
 '''
@@ -199,7 +216,7 @@ exec python3 "{Path(__file__).parent}/cc-hook.py" send --prompt "$PROMPT" --resp
             hooks_content = {
                 "description": "CC-DingHook - 全局钉钉通知工具",
                 "hooks": {
-                    "PostResponse": [
+                    "Stop": [
                         {
                             "hooks": [
                                 {
@@ -245,7 +262,7 @@ def install_command():
         print("\n🎉 安装完成！")
         print(f"📋 配置文件位置: {CONFIG_PATH}")
         print("🔧 您可以编辑配置文件来自定义通知内容")
-        print("\n⚠️  请在 Claude Code 设置中启用 post-response hook")
+        print("\n⚠️  请在 Claude Code 设置中启用 Stop hook")
         return True
     else:
         return False
@@ -259,7 +276,7 @@ def install_command():
         print("\n🎉 安装完成！")
         print(f"📋 配置文件位置: {CONFIG_PATH}")
         print("🔧 您可以编辑配置文件来自定义通知内容")
-        print("\n⚠️  请在 Claude Code 设置中启用 post-response hook")
+        print("\n⚠️  请在 Claude Code 设置中启用 Stop hook")
         return True
     else:
         return False
@@ -318,7 +335,7 @@ def main():
     
     subparsers = parser.add_subparsers(dest='command', help='可用命令')
     
-    install_parser = subparsers.add_parser('install', help='安装 Claude Code post-response hook')
+    install_parser = subparsers.add_parser('install', help='安装 Claude Code Stop hook')
     
     config_parser = subparsers.add_parser('config', help='配置钉钉通知')
     config_parser.add_argument('--access-token', help='设置钉钉 access token')

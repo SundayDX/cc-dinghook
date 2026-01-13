@@ -27,7 +27,7 @@ import hmac
 import base64
 
 DEFAULT_CONFIG = {
-    "webhook_url": "https://oapi.dingtalk.com/robot/send?access_token=59be108cccd12f84ece4d422956ca8c5843f5a09fde8fc293fb9c5de6d765b53",
+    "access_token": "",
     "secret": "",
     "enabled": True,
     "message_template": {
@@ -85,9 +85,11 @@ def send_dingtalk_message(config, title, content):
     if not config.get("enabled", True):
         return False, "通知已禁用"
     
-    webhook_url = config.get("webhook_url", "")
-    if not webhook_url:
-        return False, "未配置钉钉 webhook URL"
+    access_token = config.get("access_token", "")
+    if not access_token:
+        return False, "未配置钉钉 access token"
+    
+    webhook_url = f"https://oapi.dingtalk.com/robot/send?access_token={access_token}"
     
     message = {
         "msgtype": "markdown",
@@ -237,9 +239,9 @@ def config_command(args):
         print(json.dumps(config, indent=2, ensure_ascii=False))
         return
     
-    if args.webhook:
-        config["webhook_url"] = args.webhook
-        print(f"✅ 设置 webhook URL: {args.webhook}")
+    if args.access_token:
+        config["access_token"] = args.access_token
+        print(f"✅ 设置 access token: {args.access_token[:20]}...")
     
     if args.secret:
         config["secret"] = args.secret
@@ -270,8 +272,8 @@ def main():
   # 安装 hook 工具
   python3 cc-hook.py install
   
-  # 配置 webhook URL
-  python3 cc-hook.py config --webhook "https://oapi.dingtalk.com/robot/send?access_token=YOUR_TOKEN"
+  # 配置 access token
+  python3 cc-hook.py config --access-token "YOUR_TOKEN"
   
   # 测试通知
   python3 cc-hook.py config --test
@@ -286,7 +288,7 @@ def main():
     install_parser = subparsers.add_parser('install', help='安装 Claude Code post-response hook')
     
     config_parser = subparsers.add_parser('config', help='配置钉钉通知')
-    config_parser.add_argument('--webhook', help='设置钉钉 webhook URL')
+    config_parser.add_argument('--access-token', help='设置钉钉 access token')
     config_parser.add_argument('--secret', help='设置安全密钥')
     config_parser.add_argument('--enable', action=argparse.BooleanOptionalAction, help='启用/禁用通知')
     config_parser.add_argument('--test', action='store_true', help='发送测试消息')

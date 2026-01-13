@@ -26,8 +26,8 @@ cc-hook config --test
 # 查看当前配置
 cc-hook config --show
 
-# 设置 webhook URL
-cc-hook config --webhook "https://oapi.dingtalk.com/robot/send?access_token=YOUR_TOKEN"
+# 设置 access token
+cc-hook config --access-token "YOUR_TOKEN"
 
 # 设置安全密钥
 cc-hook config --secret "YOUR_SECRET_KEY"
@@ -41,7 +41,7 @@ cc-hook config --enable true
 ```bash
 # 批量设置配置
 cc-hook config \
-  --webhook "YOUR_WEBHOOK_URL" \
+  --access-token "YOUR_TOKEN" \
   --secret "YOUR_SECRET" \
   --enable true
 
@@ -158,7 +158,7 @@ cc-hook config --enable false
 
 ```bash
 # 配置仅通知构建结果
-cc-hook config --webhook "BUILD_WEBHOOK_URL"
+cc-hook config --access-token "BUILD_WEBHOOK_TOKEN"
 
 # 手动测试构建通知
 cc-hook send \
@@ -172,7 +172,7 @@ cc-hook send \
 
 ```bash
 # 配置测试通知
-cc-hook config --webhook "TEST_WEBHOOK_URL"
+cc-hook config --access-token "TEST_WEBHOOK_TOKEN"
 
 # 手动测试通知
 cc-hook send \
@@ -186,7 +186,7 @@ cc-hook send \
 
 ```bash
 # 配置部署通知
-cc-hook config --webhook "DEPLOY_WEBHOOK_URL"
+cc-hook config --access-token "DEPLOY_WEBHOOK_TOKEN"
 
 # 模拟部署成功
 cc-hook send \
@@ -200,19 +200,19 @@ cc-hook send \
 
 ### 1. 多环境配置
 
-为不同环境创建不同的 webhook：
+为不同环境创建不同的 access token：
 
 ```bash
 # 开发环境
-cc-hook config --webhook "DEV_WEBHOOK_URL"
+cc-hook config --access-token "DEV_WEBHOOK_TOKEN"
 cp ~/.cc-hook-config.json ~/.cc-hook-config.dev.json
 
 # 测试环境
-cc-hook config --webhook "TEST_WEBHOOK_URL"
+cc-hook config --access-token "TEST_WEBHOOK_TOKEN"
 cp ~/.cc-hook-config.json ~/.cc-hook-config.test.json
 
 # 生产环境
-cc-hook config --webhook "PROD_WEBHOOK_URL"
+cc-hook config --access-token "PROD_WEBHOOK_TOKEN"
 cp ~/.cc-hook-config.json ~/.cc-hook-config.prod.json
 
 # 切换环境
@@ -227,7 +227,7 @@ alias cc-hook-prod='cp ~/.cc-hook-config.prod.json ~/.cc-hook-config.json && cc-
 
 ```json
 {
-  "webhook_url": "https://oapi.dingtalk.com/robot/send?access_token=TEAM_TOKEN",
+  "access_token": "TEAM_TOKEN",
   "secret": "TEAM_SECRET",
   "enabled": true,
   "message_template": {

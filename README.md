@@ -80,8 +80,8 @@ cc-hook config --enable false
 
 2. **配置 Webhook**
    ```bash
-   # 使用您的 webhook URL
-   cc-hook config --webhook "https://oapi.dingtalk.com/robot/send?access_token=YOUR_TOKEN"
+   # 使用您的 access token
+   cc-hook config --access-token "YOUR_TOKEN"
    
    # 设置安全密钥（如果使用加签）
    cc-hook config --secret "YOUR_SECRET"
@@ -109,7 +109,7 @@ cc-hook config --enable false
 
 ```json
 {
-  "webhook_url": "https://oapi.dingtalk.com/robot/send?access_token=YOUR_TOKEN",
+  "access_token": "YOUR_TOKEN",
   "secret": "YOUR_SECRET_KEY",
   "enabled": true,
   "message_template": {
@@ -130,7 +130,7 @@ cc-hook config --enable false
 
 | 选项 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `webhook_url` | string | - | 钉钉机器人 Webhook URL |
+| `access_token` | string | - | 钉钉机器人 Access Token |
 | `secret` | string | "" | 安全密钥（可选） |
 | `enabled` | boolean | true | 是否启用通知 |
 | `message_template.title` | string | "Claude Code 执行完成" | 消息标题 |
@@ -188,7 +188,7 @@ cc-hook send \
 ```bash
 # 一次性设置所有配置
 cc-hook config \
-  --webhook "YOUR_WEBHOOK_URL" \
+  --access-token "YOUR_TOKEN" \
   --secret "YOUR_SECRET" \
   --enable true
 ```

@@ -86,8 +86,15 @@ def send_dingtalk_message(config, title, content):
         return False, "通知已禁用"
     
     access_token = config.get("access_token", "")
+    
+    # 向后兼容：如果没有 access_token，尝试从 webhook_url 中提取
     if not access_token:
-        return False, "未配置钉钉 access token"
+        webhook_url = config.get("webhook_url", "")
+        if webhook_url and "access_token=" in webhook_url:
+            access_token = webhook_url.split("access_token=")[1].split("&")[0]
+    
+    if not access_token:
+        return False, "未配置钉钉 access token 或 webhook_url"
     
     webhook_url = f"https://oapi.dingtalk.com/robot/send?access_token={access_token}"
     
@@ -129,9 +136,10 @@ def format_message(config, command="", response="", duration=0.0, working_dir=""
     
     status_icon = "✅"
     status_text = "响应完成"
+    title = template.get('title', 'Claude Code 响应完成')
     
     lines = [
-        f"# {template.get('title', 'Claude Code 响应完成')}",
+        f"# {title}",
         "",
         f"{status_icon} **状态**: {status_text}",
     ]
@@ -155,7 +163,8 @@ def format_message(config, command="", response="", duration=0.0, working_dir=""
         "💡 **可以进行下一次 prompt 了**"
     ])
     
-    return "\n".join(lines)
+    content = "\n".join(lines)
+    return title, content
 
 
 def setup_hook():
@@ -175,7 +184,7 @@ export RESPONSE="$RESPONSE"
 export WORKING_DIR="$WORKING_DIR"
 export DURATION="$DURATION"
 
-exec python3 "{Path(__file__).parent}/cc-hook.py" send --command "$PROMPT" --response "$RESPONSE" --working-dir "$WORKING_DIR" --duration "$DURATION"
+exec python3 "{Path(__file__).parent}/cc-hook.py" send --prompt "$PROMPT" --response "$RESPONSE" --working-dir "$WORKING_DIR" --duration "$DURATION"
 '''
     
     try:
@@ -295,7 +304,7 @@ def main():
     config_parser.add_argument('--show', action='store_true', help='显示当前配置')
     
     send_parser = subparsers.add_parser('send', help='直接发送通知')
-    send_parser.add_argument('--command', help='用户输入的 prompt')
+    send_parser.add_argument('--prompt', help='用户输入的 prompt')
     send_parser.add_argument('--response', help='Claude Code 的响应')
     send_parser.add_argument('--duration', type=float, default=0, help='响应时长（秒）')
     send_parser.add_argument('--working-dir', help='工作目录')
@@ -314,7 +323,7 @@ def main():
         config = load_config()
         title, content = format_message(
             config, 
-            args.command or "", 
+            args.prompt or "", 
             args.response or "", 
             args.duration, 
             args.working_dir or ""

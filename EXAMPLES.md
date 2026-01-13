@@ -14,8 +14,8 @@ curl -fsSL https://raw.githubusercontent.com/SundayDX/cc-dinghook/main/install.s
 cc-hook config --test
 
 # 3. 启用 Claude Code hook
-# 在 Claude Code 设置中启用 post-exec hook
-# 路径: ~/.claude/hooks/post-exec
+# 在 Claude Code 设置中启用 post-response hook
+# 路径: ~/.claude/hooks/post-response
 ```
 
 ## 📋 配置示例

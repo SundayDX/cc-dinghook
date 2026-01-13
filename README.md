@@ -14,7 +14,7 @@
 - 🔒 **安全可靠** - 支持钉钉安全签名
 - 📱 **美观通知** - Markdown 格式的精美消息
 - 🎯 **智能过滤** - 可配置成功/失败/错误通知
-- 📊 **执行统计** - 包含执行时长、退出码等详细信息
+- 📊 **响应统计** - 包含响应时长、内容摘要等信息
 
 ## 🚀 快速安装
 
@@ -96,10 +96,10 @@ cc-hook config --enable false
 
 1. 打开 Claude Code 设置
 2. 找到 "Hooks" 配置项
-3. 启用 "Post-execution hook"
-4. 设置 hook 路径为：`~/.claude/hooks/post-exec`
+3. 启用 "Post-response hook"
+4. 设置 hook 路径为：`~/.claude/hooks/post-response`
 
-现在每次 Claude Code 执行完成后，都会自动发送钉钉通知！
+现在每次 Claude Code 完成对用户 prompt 的响应后，都会自动发送钉钉通知，提醒您可以进行下一次的 prompt！
 
 ## ⚙️ 配置选项
 
@@ -222,15 +222,15 @@ cc-hook config --test
 
 #### 2. Hook 未执行
 
-**症状**：Claude Code 执行但没有触发通知
+**症状**：Claude Code 完成响应但没有触发通知
 
 **解决方案**：
 ```bash
 # 检查 hook 文件权限
-ls -la ~/.claude/hooks/post-exec
+ls -la ~/.claude/hooks/post-response
 
 # 设置执行权限
-chmod +x ~/.claude/hooks/post-exec
+chmod +x ~/.claude/hooks/post-response
 
 # 验证 Python 3
 python3 --version
@@ -241,7 +241,7 @@ python3 --version
 **解决方案**：
 ```bash
 # 修复文件权限
-chmod 755 ~/.claude/hooks/post-exec
+chmod 755 ~/.claude/hooks/post-response
 chmod 600 ~/.cc-hook-config.json
 
 # 检查目录权限
@@ -268,7 +268,7 @@ export CC_HOOK_DEBUG=true
 cc-hook config --test
 
 # 手动执行 hook
-~/.claude/hooks/post-exec "test-command" 0 1.5 "/test/dir"
+~/.claude/hooks/post-response "test-prompt" "test-response" 1.5
 ```
 
 ## 📦 卸载
@@ -278,7 +278,7 @@ cc-hook config --test
 rm -f ~/.local/bin/cc-hook
 
 # 删除 hook
-rm -f ~/.claude/hooks/post-exec
+rm -f ~/.claude/hooks/post-response
 
 # 删除配置
 rm -f ~/.cc-hook-config.json

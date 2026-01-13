@@ -122,37 +122,35 @@ def send_dingtalk_message(config, title, content):
         return False, f"发送失败: {e}"
 
 
-def format_message(config, command="", exit_code=0, duration=0.0, working_dir=""):
+def format_message(config, command="", response="", duration=0.0, working_dir=""):
     template = config.get("message_template", {})
     
-    if exit_code == 0:
-        status_icon = "✅"
-        status_text = "成功"
-    else:
-        status_icon = "❌"
-        status_text = "失败"
+    status_icon = "✅"
+    status_text = "响应完成"
     
     lines = [
-        f"# {template.get('title', 'Claude Code 执行完成')}",
+        f"# {template.get('title', 'Claude Code 响应完成')}",
         "",
-        f"{status_icon} **执行状态**: {status_text}",
+        f"{status_icon} **状态**: {status_text}",
     ]
     
     if command:
-        lines.append(f"📝 **执行的命令**: `{command}`")
+        lines.append(f"👤 **用户输入**: `{command[:100]}{'...' if len(command) > 100 else ''}`")
     
-    if template.get("include_exit_code", True):
-        lines.append(f"🔢 **退出码**: {exit_code}")
+    if response:
+        lines.append(f"🤖 **AI响应**: `{response[:150]}{'...' if len(response) > 150 else ''}`")
     
     if template.get("include_duration", True) and duration > 0:
-        lines.append(f"⏱️ **执行时长**: {duration:.2f}秒")
+        lines.append(f"⏱️ **响应时长**: {duration:.2f}秒")
     
     if template.get("include_working_dir", True) and working_dir:
         lines.append(f"📁 **工作目录**: `{working_dir}`")
     
     lines.extend([
         "",
-        f"🕐 **完成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        f"🕐 **完成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        "",
+        "💡 **可以进行下一次 prompt 了**"
     ])
     
     return "\n".join(lines)
@@ -162,20 +160,20 @@ def setup_hook():
     hook_dir = Path.home() / ".claude" / "hooks"
     hook_dir.mkdir(parents=True, exist_ok=True)
     
-    hook_script = hook_dir / "post-exec"
+    hook_script = hook_dir / "post-response"
     
     script_content = f'''#!/bin/bash
-COMMAND="$1"
-EXIT_CODE="$2"
-WORKING_DIR="$PWD"
+PROMPT="$1"
+RESPONSE="$2"
 DURATION="$3"
+WORKING_DIR="$PWD"
 
-export COMMAND="$COMMAND"
-export EXIT_CODE="$EXIT_CODE" 
+export PROMPT="$PROMPT"
+export RESPONSE="$RESPONSE" 
 export WORKING_DIR="$WORKING_DIR"
 export DURATION="$DURATION"
 
-exec python3 "{Path(__file__).parent}/cc-hook.py" send --command "$COMMAND" --exit-code "$EXIT_CODE" --working-dir "$WORKING_DIR" --duration "$DURATION"
+exec python3 "{Path(__file__).parent}/cc-hook.py" send --command "$PROMPT" --response "$RESPONSE" --working-dir "$WORKING_DIR" --duration "$DURATION"
 '''
     
     try:
@@ -185,7 +183,7 @@ exec python3 "{Path(__file__).parent}/cc-hook.py" send --command "$COMMAND" --ex
         hook_script.chmod(0o755)
         
         print(f"✅ Hook 已安装到: {hook_script}")
-        print("📝 请确保在 Claude Code 配置中启用此 hook")
+        print("📝 请确保在 Claude Code 配置中启用 post-response hook")
         return True
         
     except Exception as e:
@@ -212,7 +210,7 @@ def install_command():
         print("\n🎉 安装完成！")
         print(f"📋 配置文件位置: {CONFIG_PATH}")
         print("🔧 您可以编辑配置文件来自定义通知内容")
-        print("\n⚠️  请在 Claude Code 设置中启用 post-exec hook")
+        print("\n⚠️  请在 Claude Code 设置中启用 post-response hook")
         return True
     else:
         return False
@@ -226,7 +224,7 @@ def install_command():
         print("\n🎉 安装完成！")
         print(f"📋 配置文件位置: {CONFIG_PATH}")
         print("🔧 您可以编辑配置文件来自定义通知内容")
-        print("\n⚠️  请在 Claude Code 设置中启用 post-exec hook")
+        print("\n⚠️  请在 Claude Code 设置中启用 post-response hook")
         return True
     else:
         return False
@@ -252,7 +250,7 @@ def config_command(args):
         print(f"✅ {'启用' if args.enable else '禁用'}通知")
     
     if args.test:
-        title, content = format_message(config, "test-command", 0, 1.5, "/test/dir")
+        title, content = format_message(config, "test-command", "这是测试响应", 1.5, "/test/dir")
         success, message = send_dingtalk_message(config, title, content)
         if success:
             print("✅ 测试消息发送成功")
@@ -285,7 +283,7 @@ def main():
     
     subparsers = parser.add_subparsers(dest='command', help='可用命令')
     
-    install_parser = subparsers.add_parser('install', help='安装 Claude Code hook')
+    install_parser = subparsers.add_parser('install', help='安装 Claude Code post-response hook')
     
     config_parser = subparsers.add_parser('config', help='配置钉钉通知')
     config_parser.add_argument('--webhook', help='设置钉钉 webhook URL')
@@ -295,9 +293,9 @@ def main():
     config_parser.add_argument('--show', action='store_true', help='显示当前配置')
     
     send_parser = subparsers.add_parser('send', help='直接发送通知')
-    send_parser.add_argument('--command', help='执行的命令')
-    send_parser.add_argument('--exit-code', type=int, default=0, help='退出码')
-    send_parser.add_argument('--duration', type=float, default=0, help='执行时长（秒）')
+    send_parser.add_argument('--command', help='用户输入的 prompt')
+    send_parser.add_argument('--response', help='Claude Code 的响应')
+    send_parser.add_argument('--duration', type=float, default=0, help='响应时长（秒）')
     send_parser.add_argument('--working-dir', help='工作目录')
     
     args = parser.parse_args()
@@ -315,7 +313,7 @@ def main():
         title, content = format_message(
             config, 
             args.command or "", 
-            args.exit_code, 
+            args.response or "", 
             args.duration, 
             args.working_dir or ""
         )

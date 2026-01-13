@@ -8,7 +8,7 @@
 
 ```bash
 # 1. 一键安装
-curl -fsSL https://raw.githubusercontent.com/SundayDX/cc-dinghook/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/SundayDX/cc-dinghook/master/install.sh | bash
 
 # 2. 配置钉钉（使用默认 URL 已预置）
 cc-hook config --test

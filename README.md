@@ -21,7 +21,7 @@
 ### 方法一：一键安装（推荐）
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/SundayDX/cc-dinghook/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/SundayDX/cc-dinghook/master/install.sh | bash
 ```
 
 ### 方法二：手动安装
@@ -29,7 +29,7 @@ curl -fsSL https://raw.githubusercontent.com/SundayDX/cc-dinghook/main/install.s
 ```bash
 # 下载脚本
 mkdir -p ~/.local/bin
-curl -fsSL https://raw.githubusercontent.com/SundayDX/cc-dinghook/main/cc-hook.py -o ~/.local/bin/cc-hook
+curl -fsSL https://raw.githubusercontent.com/SundayDX/cc-dinghook/master/cc-hook.py -o ~/.local/bin/cc-hook
 chmod +x ~/.local/bin/cc-hook
 
 # 安装 hook

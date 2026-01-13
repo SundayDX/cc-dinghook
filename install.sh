@@ -5,7 +5,7 @@ set -e
 INSTALL_DIR="$HOME/.local/bin"
 CONFIG_DIR="$HOME/.claude"
 SCRIPT_NAME="cc-hook"
-SCRIPT_URL="https://raw.githubusercontent.com/SundayDX/cc-dinghook/main/cc-hook.py"
+SCRIPT_URL="https://raw.githubusercontent.com/SundayDX/cc-dinghook/master/cc-hook.py"
 
 echo "🚀 开始安装 Claude Code Hook 工具..."
 
@@ -44,7 +44,7 @@ echo ""
 echo "📋 使用方法:"
 echo "  cc-hook config --test                    # 测试通知"
 echo "  cc-hook config --show                    # 查看配置"
-echo "  cc-hook config --webhook YOUR_URL        # 设置 webhook"
+echo "  cc-hook config --access-token YOUR_TOKEN # 设置 access token"
 echo ""
 echo "⚠️  请在 Claude Code 设置中启用 post-response hook"
 echo "   Hook 路径: $CONFIG_DIR/hooks/post-response"

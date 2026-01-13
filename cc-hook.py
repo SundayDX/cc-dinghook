@@ -193,8 +193,32 @@ exec python3 "{Path(__file__).parent}/cc-hook.py" send --prompt "$PROMPT" --resp
         
         hook_script.chmod(0o755)
         
+        # 尝试创建全局 hooks.json 配置
+        hooks_config = Path.home() / ".claude" / "hooks.json"
+        if not hooks_config.exists():
+            hooks_content = {
+                "description": "CC-DingHook - 全局钉钉通知工具",
+                "hooks": {
+                    "PostResponse": [
+                        {
+                            "hooks": [
+                                {
+                                    "type": "command",
+                                    "command": str(hook_script),
+                                    "timeout": 10
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+            
+            with open(hooks_config, 'w', encoding='utf-8') as f:
+                json.dump(hooks_content, f, indent=2, ensure_ascii=False)
+            print(f"✅ 已创建全局 hooks 配置: {hooks_config}")
+        
         print(f"✅ Hook 已安装到: {hook_script}")
-        print("📝 请确保在 Claude Code 配置中启用 post-response hook")
+        print("📝 已自动配置全局 hooks，请重启 Claude Code")
         return True
         
     except Exception as e:

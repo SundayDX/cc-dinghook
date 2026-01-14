@@ -181,22 +181,131 @@ def setup_hook():
     hooks_dir = Path.home() / ".claude" / "hooks"
     hooks_dir.mkdir(parents=True, exist_ok=True)
 
-    # 获取源码目录（包含 cc-hook.py 的目录）
-    src_dir = Path(__file__).parent
-    
-    # 复制脚本文件
-    import shutil
-    script_files = {
-        'extract_messages.py': 'src/extract_messages.py',
-        'calc_duration.py': 'src/calc_duration.py'
+    # 辅助脚本内容（直接嵌入，避免依赖外部文件）
+    extract_messages_script = '''#!/usr/bin/env python3
+"""
+Extract user prompt and AI response summary from transcript
+"""
+import json
+import sys
+
+def extract_from_transcript(transcript_path: str):
+    """
+    Extract last user message and AI response summary from transcript
+    """
+    try:
+        with open(transcript_path, 'r') as f:
+            lines = f.readlines()
+
+        # Extract last user message (max 300 chars)
+        last_user = "无"
+        for line in reversed(lines):
+            try:
+                msg = json.loads(line)
+                if msg.get('type') == 'user':
+                    content = msg.get('content', '')
+                    if content:
+                        last_user = content[:300] + '...' if len(content) > 300 else content
+                    break
+            except:
+                pass
+
+        # Extract last 2 tool outputs as AI response summary (max 200 chars each)
+        tool_summaries = []
+        for line in reversed(lines):
+            try:
+                msg = json.loads(line)
+                if msg.get('type') == 'tool_result':
+                    output = msg.get('tool_output', {})
+                    tool_name = msg.get('tool_name', '')
+                    if isinstance(output, dict):
+                        output_text = output.get('output', '')
+                        if tool_name and output_text:
+                            summary = output_text[:200] + '...' if len(output_text) > 200 else output_text
+                            tool_summaries.append(f"[{tool_name}] {summary}")
+                            if len(tool_summaries) >= 2:
+                                break
+            except:
+                pass
+
+        last_assistant = '\\n'.join(tool_summaries) if tool_summaries else "无"
+
+        return last_user, last_assistant
+
+    except Exception as e:
+        return "无", "无"
+
+
+if __name__ == '__main__':
+    if len(sys.argv) >= 2:
+        transcript_path = sys.argv[1]
+        prompt, assistant = extract_from_transcript(transcript_path)
+        print(f"{prompt}|{assistant}")
+    else:
+        print("无|无")
+'''
+
+    calc_duration_script = '''#!/usr/bin/env python3
+"""
+Calculate duration from transcript timestamps
+"""
+import json
+import sys
+
+
+def calc_duration(transcript_path: str):
+    """
+    Calculate duration from transcript file
+    """
+    try:
+        with open(transcript_path, 'r') as f:
+            lines = f.readlines()
+
+        timestamps = []
+        for line in lines:
+            try:
+                msg = json.loads(line)
+                ts = msg.get('timestamp', 0)
+                if ts:
+                    timestamps.append(ts)
+            except:
+                pass
+
+        if len(timestamps) >= 2:
+            first_time = timestamps[0]
+            last_time = timestamps[-1]
+            if first_time < last_time:
+                duration = (last_time - first_time) / 1000
+                print(f"{duration:.1f}")
+                return
+
+        print("5.0")
+        return "5.0"
+    except Exception as e:
+        print("5.0")
+        return "5.0"
+
+
+if __name__ == '__main__':
+    if len(sys.argv) >= 2:
+        transcript_path = sys.argv[1]
+        calc_duration(transcript_path)
+    else:
+        print("5.0")
+'''
+
+    # 创建辅助脚本文件
+    scripts = {
+        'extract_messages.py': extract_messages_script,
+        'calc_duration.py': calc_duration_script
     }
 
-    for script_name, relative_path in script_files.items():
-        source_file = src_dir / relative_path
+    for script_name, script_content in scripts.items():
         dest_file = hooks_dir / script_name
-        shutil.copy2(source_file, dest_file)
+        with open(dest_file, 'w', encoding='utf-8') as f:
+            f.write(script_content)
         dest_file.chmod(0o755)
-        print(f"✅ 已复制 {script_name} 到 {dest_file}")
+        print(f"✅ 已创建 {script_name} 到 {dest_file}")
 
     # 创建 Stop hook 脚本
     hook_script = hooks_dir / "stop"

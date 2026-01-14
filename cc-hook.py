@@ -201,7 +201,7 @@ export RESPONSE="$response_text"
 export WORKING_DIR="$working_dir"
 export DURATION="$duration"
 
-exec python3 "~/.local/bin/cc-hook" send --prompt "$PROMPT" --response "$RESPONSE" --working-dir "$WORKING_DIR" --duration "$DURATION"
+exec python3 "$HOME/.local/bin/cc-hook" send --prompt "$PROMPT" --response "$RESPONSE" --working-dir "$WORKING_DIR" --duration "$DURATION"
 '''
     
     try:

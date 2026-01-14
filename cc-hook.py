@@ -201,7 +201,7 @@ export RESPONSE="$response_text"
 export WORKING_DIR="$working_dir"
 export DURATION="$duration"
 
-exec python3 "{Path(__file__).parent}/cc-hook.py" send --prompt "$PROMPT" --response "$RESPONSE" --working-dir "$WORKING_DIR" --duration "$DURATION"
+exec python3 "~/.local/bin/cc-hook" send --prompt "$PROMPT" --response "$RESPONSE" --working-dir "$WORKING_DIR" --duration "$DURATION"
 '''
     
     try:
@@ -209,31 +209,41 @@ exec python3 "{Path(__file__).parent}/cc-hook.py" send --prompt "$PROMPT" --resp
             f.write(script_content)
         
         hook_script.chmod(0o755)
-        
-        # 尝试创建全局 hooks.json 配置
-        hooks_config = Path.home() / ".claude" / "hooks.json"
-        if not hooks_config.exists():
-            hooks_content = {
-                "description": "CC-DingHook - 全局钉钉通知工具",
-                "hooks": {
-                    "Stop": [
+
+        # 在 settings.json 中添加 hooks 配置
+        settings_file = Path.home() / ".claude" / "settings.json"
+        try:
+            # 读取现有的 settings.json
+            if settings_file.exists():
+                with open(settings_file, 'r', encoding='utf-8') as f:
+                    settings = json.load(f)
+            else:
+                settings = {}
+
+            # 添加 hooks 配置
+            if 'hooks' not in settings:
+                settings['hooks'] = {}
+
+            settings['hooks']['Stop'] = [
+                {
+                    "hooks": [
                         {
-                            "hooks": [
-                                {
-                                    "type": "command",
-                                    "command": str(hook_script),
-                                    "timeout": 10
-                                }
-                            ]
+                            "type": "command",
+                            "command": str(hook_script),
+                            "timeout": 10
                         }
                     ]
                 }
-            }
-            
-            with open(hooks_config, 'w', encoding='utf-8') as f:
-                json.dump(hooks_content, f, indent=2, ensure_ascii=False)
-            print(f"✅ 已创建全局 hooks 配置: {hooks_config}")
-        
+            ]
+
+            # 保存 settings.json
+            with open(settings_file, 'w', encoding='utf-8') as f:
+                json.dump(settings, f, indent=2, ensure_ascii=False)
+            print(f"✅ 已在 settings.json 中配置 hooks: {settings_file}")
+        except Exception as e:
+            print(f"⚠️  配置 settings.json 失败: {e}")
+            print("请手动在 ~/.claude/settings.json 中添加 hooks 配置")
+
         print(f"✅ Hook 已安装到: {hook_script}")
         print("📝 已自动配置全局 hooks，请重启 Claude Code")
         return True

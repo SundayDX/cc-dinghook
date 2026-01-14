@@ -189,116 +189,23 @@ def setup_hook():
 # 从标准输入读取 Stop hook 的 JSON 数据
 input_data=$(cat)
 
-# 提取基本信息和 transcript 路径
-python3 << 'PYEOF' > /tmp/hook_extract_$${{PID}}
-import json
-import sys
+# 提取 cwd 和 transcript_path
+cwd=$(echo "$input_data" | python3 -c "import json, sys; data = json.load(sys.stdin); print(data.get('cwd', ''))")
+transcript_path=$(echo "$input_data" | python3 -c "import json, sys; data = json.load(sys.stdin); print(data.get('transcript_path', ''))")
 
-try:
-    data = json.load(sys.stdin)
-    cwd = data.get('cwd', '')
-    transcript_path = data.get('transcript_path', '')
-    print(f"{{cwd}}|{{transcript_path}}")
-except Exception as e:
-    print(f"|")
-PYEOF
-
-extracted=$(cat /tmp/hook_extract_$${{PID}})
-rm -f /tmp/hook_extract_$${{PID}}
-
-working_dir=$(echo "$extracted" | cut -d'|' -f1)
-transcript_path=$(echo "$extracted" | cut -d'|' -f2)
-
-# 提取用户 prompt 和 AI 响应摘要
+# 提取用户 prompt 和 AI 响应摘要（使用独立的 Python 脚本）
 if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
-    python3 << 'PYEOF2' > /tmp/hook_messages_$${{PID}}
-import json
-
-try:
-    with open('$transcript_path', 'r') as f:
-        lines = f.readlines()
-
-    # 提取最后一条用户消息
-    last_user = "无"
-    for line in reversed(lines):
-        try:
-            msg = json.loads(line)
-            if msg.get('type') == 'user':
-                content = msg.get('content', '')
-                if content:
-                    last_user = content[:300] + '...' if len(content) > 300 else content
-                break
-        except:
-            pass
-
-    # 提取最后几个工具输出作为 AI 响应摘要
-    tool_summaries = []
-    for line in reversed(lines):
-        try:
-            msg = json.loads(line)
-            if msg.get('type') == 'tool_result':
-                output = msg.get('tool_output', {{}})
-                tool_name = msg.get('tool_name', '')
-                if isinstance(output, dict):
-                    output_text = output.get('output', '')
-                    if tool_name and output_text:
-                        summary = output_text[:200] + '...' if len(output_text) > 200 else output_text
-                        tool_summaries.append(f"[{{tool_name}}] {{summary}}")
-                        if len(tool_summaries) >= 2:
-                            break
-        except:
-            pass
-
-    last_assistant = '\\n'.join(tool_summaries) if tool_summaries else "无"
-
-    print(f"{{last_user}}|{{last_assistant}}")
-except Exception as e:
-    print(f"无|无")
-PYEOF2
-
-    extracted_messages=$(cat /tmp/hook_messages_$${{PID}})
-    rm -f /tmp/hook_messages_$${{PID}}
-
-    prompt_text=$(echo "$extracted_messages" | cut -d'|' -f1)
-    response_text=$(echo "$extracted_messages" | cut -d'|' -f2)
+    # 使用单独的 Python 脚本提取信息
+    prompt_text=$(~/.claude/hooks/extract_messages.py "$transcript_path" | cut -d'|' -f1)
+    response_text=$(~/.claude/hooks/extract_messages.py "$transcript_path" | cut -d'|' -f2)
 else
     prompt_text="Claude Code 响应完成"
     response_text="AI 任务已完成"
 fi
 
-# 计算 duration
+# 计算 duration（使用独立的 Python 脚本）
 if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
-    python3 << 'PYEOF3' > /tmp/hook_duration_$${{PID}}
-import json
-
-try:
-    with open('$transcript_path', 'r') as f:
-        lines = f.readlines()
-
-    if len(lines) >= 2:
-        first_msg = json.loads(lines[0])
-        last_msg = json.loads(lines[-1])
-
-        first_time = first_msg.get('timestamp', 0)
-        last_time = last_msg.get('timestamp', 0)
-
-        if first_time and last_time and first_time < last_time:
-            duration = (last_time - first_time) / 1000
-            print(f"{{duration:.1f}}")
-        else:
-            print("5.0")
-    else:
-        print("5.0")
-except Exception as e:
-    print("5.0")
-PYEOF3
-
-    if [ -f /tmp/hook_duration_$${{PID}} ]; then
-        duration=$(cat /tmp/hook_duration_$${{PID}})
-        rm -f /tmp/hook_duration_$${{PID}}
-    else
-        duration="5.0"
-    fi
+    duration=$(~/.claude/hooks/calc_duration.py "$transcript_path")
 else
     duration="5.0"
 fi
@@ -306,7 +213,7 @@ fi
 # 导出环境变量并调用通知脚本
 export PROMPT="$prompt_text"
 export RESPONSE="$response_text"
-export WORKING_DIR="$working_dir"
+export WORKING_DIR="$cwd"
 export DURATION="$duration"
 
 exec python3 "$HOME/.local/bin/cc-hook" send --prompt "$PROMPT" --response "$RESPONSE" --working-dir "$WORKING_DIR" --duration "$DURATION"

@@ -216,15 +216,21 @@ def extract_from_transcript(transcript_path: str):
             try:
                 msg = json.loads(line)
                 if msg.get('type') == 'tool_result':
-                    output = msg.get('tool_output', {})
                     tool_name = msg.get('tool_name', '')
-                    if isinstance(output, dict):
-                        output_text = output.get('output', '')
-                        if tool_name and output_text:
-                            summary = output_text[:200] + '...' if len(output_text) > 200 else output_text
-                            tool_summaries.append(f"[{tool_name}] {summary}")
-                            if len(tool_summaries) >= 2:
-                                break
+                    # tool_output 可能在不同位置
+                    tool_output = msg.get('tool_output', {})
+                    output_text = ''
+
+                    if isinstance(tool_output, dict):
+                        output_text = tool_output.get('output', '')
+                    elif isinstance(tool_output, str):
+                        output_text = tool_output
+
+                    if tool_name and output_text:
+                        summary = output_text[:200] + '...' if len(output_text) > 200 else output_text
+                        tool_summaries.append(f"[{tool_name}] {summary}")
+                        if len(tool_summaries) >= 2:
+                            break
             except:
                 pass
 
@@ -251,6 +257,7 @@ Calculate duration from transcript timestamps
 """
 import json
 import sys
+from datetime import datetime
 
 
 def calc_duration(transcript_path: str):
@@ -265,9 +272,18 @@ def calc_duration(transcript_path: str):
         for line in lines:
             try:
                 msg = json.loads(line)
-                ts = msg.get('timestamp', 0)
+                ts = msg.get('timestamp', '')
                 if ts:
-                    timestamps.append(ts)
+                    # 尝试解析 ISO 8601 格式的时间戳
+                    try:
+                        dt = datetime.fromisoformat(ts.replace('Z', '+00:00'))
+                        timestamps.append(dt.timestamp())
+                    except:
+                        # 如果不是 ISO 格式，尝试作为数字处理
+                        try:
+                            timestamps.append(float(ts))
+                        except:
+                            pass
             except:
                 pass
 
@@ -275,7 +291,7 @@ def calc_duration(transcript_path: str):
             first_time = timestamps[0]
             last_time = timestamps[-1]
             if first_time < last_time:
-                duration = (last_time - first_time) / 1000
+                duration = (last_time - first_time)
                 print(f"{duration:.1f}")
                 return
 

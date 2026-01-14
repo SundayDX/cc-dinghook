@@ -190,73 +190,86 @@ def setup_hook():
 input_data=$(cat)
 
 # 提取基本信息和 transcript 路径
-extract_info=$(echo "$input_data" | python3 -c "
-import json, sys
+python3 << 'PYEOF' > /tmp/hook_extract_$${{PID}}
+import json
+import sys
+
 try:
     data = json.load(sys.stdin)
     cwd = data.get('cwd', '')
     transcript_path = data.get('transcript_path', '')
-    print(f'{{cwd}}|{{transcript_path}}')
-except:
-    print('|')
-")
+    print(f"{{cwd}}|{{transcript_path}}")
+except Exception as e:
+    print(f"|")
+PYEOF
 
-working_dir=$(echo "$extract_info" | cut -d'|' -f1)
-transcript_path=$(echo "$extract_info" | cut -d'|' -f2)
+extracted=$(cat /tmp/hook_extract_$${{PID}})
+rm -f /tmp/hook_extract_$${{PID}}
 
-# 从 transcript 中提取最后的用户 prompt 和 AI 响应
+working_dir=$(echo "$extracted" | cut -d'|' -f1)
+transcript_path=$(echo "$extracted" | cut -d'|' -f2)
+
+# 提取用户 prompt 和 AI 响应摘要
 if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
-    extract_result=$(python3 -c "
+    python3 << 'PYEOF2' > /tmp/hook_messages_$${{PID}}
 import json
-import sys
 
 try:
     with open('$transcript_path', 'r') as f:
         lines = f.readlines()
 
-    # 提取所有用户消息和助手响应
-    user_messages = []
-    assistant_messages = []
-
+    # 提取最后一条用户消息
+    last_user = "无"
     for line in reversed(lines):
-        if line.strip():
+        try:
             msg = json.loads(line)
-            role = msg.get('role', '')
-
-            if role == 'user':
+            if msg.get('type') == 'user':
                 content = msg.get('content', '')
-                if isinstance(content, str):
-                    user_messages.append(content)
-                elif isinstance(content, dict):
-                    user_messages.append(content.get('text', ''))
-            elif role == 'assistant':
-                content = msg.get('content', '')
-                if isinstance(content, str):
-                    assistant_messages.append(content)
-                elif isinstance(content, dict):
-                    assistant_messages.append(content.get('text', ''))
+                if content:
+                    last_user = content[:300] + '...' if len(content) > 300 else content
+                break
+        except:
+            pass
 
-    # 取最后一条
-    last_user = user_messages[0] if user_messages else '无'
-    last_assistant = assistant_messages[0] if assistant_messages else '无'
+    # 提取最后几个工具输出作为 AI 响应摘要
+    tool_summaries = []
+    for line in reversed(lines):
+        try:
+            msg = json.loads(line)
+            if msg.get('type') == 'tool_result':
+                output = msg.get('tool_output', {{}})
+                tool_name = msg.get('tool_name', '')
+                if isinstance(output, dict):
+                    output_text = output.get('output', '')
+                    if tool_name and output_text:
+                        summary = output_text[:200] + '...' if len(output_text) > 200 else output_text
+                        tool_summaries.append(f"[{{tool_name}}] {{summary}}")
+                        if len(tool_summaries) >= 2:
+                            break
+        except:
+            pass
 
-    print(f'{{last_user}}|{{last_assistant}}')
+    last_assistant = '\\n'.join(tool_summaries) if tool_summaries else "无"
+
+    print(f"{{last_user}}|{{last_assistant}}")
 except Exception as e:
-    print(f'|')
-")
+    print(f"无|无")
+PYEOF2
 
-    prompt_text=$(echo "$extract_result" | cut -d'|' -f1)
-    response_text=$(echo "$extract_result" | cut -d'|' -f2)
+    extracted_messages=$(cat /tmp/hook_messages_$${{PID}})
+    rm -f /tmp/hook_messages_$${{PID}}
+
+    prompt_text=$(echo "$extracted_messages" | cut -d'|' -f1)
+    response_text=$(echo "$extracted_messages" | cut -d'|' -f2)
 else
     prompt_text="Claude Code 响应完成"
     response_text="AI 任务已完成"
 fi
 
-# 计算 duration（从 transcript 中提取时间戳）
+# 计算 duration
 if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
-    duration=$(python3 -c "
+    python3 << 'PYEOF3' > /tmp/hook_duration_$${{PID}}
 import json
-import sys
 
 try:
     with open('$transcript_path', 'r') as f:
@@ -270,15 +283,22 @@ try:
         last_time = last_msg.get('timestamp', 0)
 
         if first_time and last_time and first_time < last_time:
-            duration = (last_time - first_time) / 1000  # 转换为秒
-            print(f'{{duration:.2f}}')
+            duration = (last_time - first_time) / 1000
+            print(f"{{duration:.1f}}")
         else:
-            print('5.0')
+            print("5.0")
     else:
-        print('5.0')
+        print("5.0")
 except Exception as e:
-    print('5.0')
-")
+    print("5.0")
+PYEOF3
+
+    if [ -f /tmp/hook_duration_$${{PID}} ]; then
+        duration=$(cat /tmp/hook_duration_$${{PID}})
+        rm -f /tmp/hook_duration_$${{PID}}
+    else
+        duration="5.0"
+    fi
 else
     duration="5.0"
 fi

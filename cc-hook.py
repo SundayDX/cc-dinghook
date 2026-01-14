@@ -177,11 +177,30 @@ def format_message(config, command="", response="", duration=0.0, working_dir=""
 
 
 def setup_hook():
-    hook_dir = Path.home() / ".claude" / "hooks"
-    hook_dir.mkdir(parents=True, exist_ok=True)
+    # 复制脚本到用户目录
+    hooks_dir = Path.home() / ".claude" / "hooks"
+    hooks_dir.mkdir(parents=True, exist_ok=True)
+
+    # 获取源码目录（包含 cc-hook.py 的目录）
+    src_dir = Path(__file__).parent
     
-    hook_script = hook_dir / "stop"
-    
+    # 复制脚本文件
+    import shutil
+    script_files = {
+        'extract_messages.py': 'src/extract_messages.py',
+        'calc_duration.py': 'src/calc_duration.py'
+    }
+
+    for script_name, relative_path in script_files.items():
+        source_file = src_dir / relative_path
+        dest_file = hooks_dir / script_name
+        shutil.copy2(source_file, dest_file)
+        dest_file.chmod(0o755)
+        print(f"✅ 已复制 {script_name} 到 {dest_file}")
+
+    # 创建 Stop hook 脚本
+    hook_script = hooks_dir / "stop"
+
     # 创建 Stop hook 脚本
     script_content = f'''#!/bin/bash
 # Claude Code Stop Hook - 在每次 Claude Code 完成响应后发送钉钉通知
@@ -193,7 +212,7 @@ input_data=$(cat)
 cwd=$(echo "$input_data" | python3 -c "import json, sys; data = json.load(sys.stdin); print(data.get('cwd', ''))")
 transcript_path=$(echo "$input_data" | python3 -c "import json, sys; data = json.load(sys.stdin); print(data.get('transcript_path', ''))")
 
-# 提取用户 prompt 和 AI 响应摘要（使用独立的 Python 脚本）
+# 提取用户 prompt 和 AI 响应摘要
 if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
     # 使用单独的 Python 脚本提取信息
     prompt_text=$(~/.claude/hooks/extract_messages.py "$transcript_path" | cut -d'|' -f1)
@@ -203,7 +222,7 @@ else
     response_text="AI 任务已完成"
 fi
 
-# 计算 duration（使用独立的 Python 脚本）
+# 计算 duration
 if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
     duration=$(~/.claude/hooks/calc_duration.py "$transcript_path")
 else
@@ -218,6 +237,54 @@ export DURATION="$duration"
 
 exec python3 "$HOME/.local/bin/cc-hook" send --prompt "$PROMPT" --response "$RESPONSE" --working-dir "$WORKING_DIR" --duration "$DURATION"
 '''
+    
+    try:
+        with open(hook_script, 'w', encoding='utf-8') as f:
+            f.write(script_content)
+        
+        hook_script.chmod(0o755)
+        
+        # 在 settings.json 中添加 hooks 配置
+        settings_file = Path.home() / ".claude" / "settings.json"
+        try:
+            # 读取现有的 settings.json
+            if settings_file.exists():
+                with open(settings_file, 'r', encoding='utf-8') as f:
+                    settings = json.load(f)
+            else:
+                settings = {}
+
+            # 添加 hooks 配置
+            if 'hooks' not in settings:
+                settings['hooks'] = {}
+
+            settings['hooks']['Stop'] = [
+                {
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": str(hook_script),
+                            "timeout": 10
+                        }
+                    ]
+                }
+            ]
+
+            # 保存 settings.json
+            with open(settings_file, 'w', encoding='utf-8') as f:
+                json.dump(settings, f, indent=2, ensure_ascii=False)
+            print(f"✅ 已在 settings.json 中配置 hooks: {settings_file}")
+        except Exception as e:
+            print(f"⚠️  配置 settings.json 失败: {e}")
+            print("请手动在 ~/.claude/settings.json 中添加 hooks 配置")
+
+        print(f"✅ Hook 已安装到: {hook_script}")
+        print("📝 已自动配置全局 hooks，请重启 Claude Code")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Hook 安装失败: {e}")
+        return False
     
     try:
         with open(hook_script, 'w', encoding='utf-8') as f:

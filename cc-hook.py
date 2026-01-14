@@ -234,7 +234,8 @@ def extract_from_transcript(transcript_path: str):
             except:
                 pass
 
-        last_assistant = '\\n'.join(tool_summaries) if tool_summaries else "无"
+        # 使用 chr(10) 代表换行符
+        last_assistant = chr(10).join(tool_summaries) if tool_summaries else "无"
 
         return last_user, last_assistant
 

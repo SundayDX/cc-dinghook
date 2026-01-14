@@ -133,36 +133,45 @@ def send_dingtalk_message(config, title, content):
 
 def format_message(config, command="", response="", duration=0.0, working_dir=""):
     template = config.get("message_template", {})
-    
+
+    # 提取项目名称（从工作目录）
+    project_name = working_dir.split('/')[-1] if working_dir and '/' in working_dir else working_dir
+
     status_icon = "✅"
-    status_text = "响应完成"
     title = template.get('title', 'Claude Code 响应完成')
-    
+
     lines = [
         f"# {title}",
         "",
-        f"{status_icon} **状态**: {status_text}",
+        f"{status_icon} **项目**: `{project_name}`",
     ]
-    
-    if command:
-        lines.append(f"👤 **用户输入**: `{command[:100]}{'...' if len(command) > 100 else ''}`")
-    
-    if response:
-        lines.append(f"🤖 **AI响应**: `{response[:150]}{'...' if len(response) > 150 else ''}`")
-    
+
+    # 显示用户输入（最多 300 字符）
+    if command and command != "Claude Code 响应完成":
+        user_display = command[:300] + '...' if len(command) > 300 else command
+        lines.append(f"📝 **用户输入**:")
+        lines.append(f"> {user_display}")
+
+    # 显示 AI 响应摘要（最多 500 字符）
+    if response and response != "AI 任务已完成":
+        response_display = response[:500] + '...' if len(response) > 500 else response
+        lines.append(f"")
+        lines.append(f"🤖 **AI 响应摘要**:")
+        lines.append(f"> {response_display}")
+
+    # 可选：显示额外信息
     if template.get("include_duration", True) and duration > 0:
-        lines.append(f"⏱️ **响应时长**: {duration:.2f}秒")
-    
+        lines.append(f"")
+        lines.append(f"⏱️ 耗时: {duration:.1f}秒")
+
     if template.get("include_working_dir", True) and working_dir:
-        lines.append(f"📁 **工作目录**: `{working_dir}`")
-    
+        lines.append(f"📁 路径: `{working_dir}`")
+
     lines.extend([
         "",
-        f"🕐 **完成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-        "",
-        "💡 **可以进行下一次 prompt 了**"
+        f"🕐 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
     ])
-    
+
     content = "\n".join(lines)
     return title, content
 
@@ -180,20 +189,99 @@ def setup_hook():
 # 从标准输入读取 Stop hook 的 JSON 数据
 input_data=$(cat)
 
-# 提取基本信息
-working_dir=$(echo "$input_data" | python3 -c "
+# 提取基本信息和 transcript 路径
+extract_info=$(echo "$input_data" | python3 -c "
 import json, sys
 try:
     data = json.load(sys.stdin)
-    print(data.get('cwd', ''))
+    cwd = data.get('cwd', '')
+    transcript_path = data.get('transcript_path', '')
+    print(f'{{cwd}}|{{transcript_path}}')
 except:
-    print('')
+    print('|')
 ")
 
-# 设置默认的通知信息
-prompt_text="Claude Code 响应完成"
-response_text="AI 任务已完成"
-duration="5.0"
+working_dir=$(echo "$extract_info" | cut -d'|' -f1)
+transcript_path=$(echo "$extract_info" | cut -d'|' -f2)
+
+# 从 transcript 中提取最后的用户 prompt 和 AI 响应
+if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
+    extract_result=$(python3 -c "
+import json
+import sys
+
+try:
+    with open('$transcript_path', 'r') as f:
+        lines = f.readlines()
+
+    # 提取所有用户消息和助手响应
+    user_messages = []
+    assistant_messages = []
+
+    for line in reversed(lines):
+        if line.strip():
+            msg = json.loads(line)
+            role = msg.get('role', '')
+
+            if role == 'user':
+                content = msg.get('content', '')
+                if isinstance(content, str):
+                    user_messages.append(content)
+                elif isinstance(content, dict):
+                    user_messages.append(content.get('text', ''))
+            elif role == 'assistant':
+                content = msg.get('content', '')
+                if isinstance(content, str):
+                    assistant_messages.append(content)
+                elif isinstance(content, dict):
+                    assistant_messages.append(content.get('text', ''))
+
+    # 取最后一条
+    last_user = user_messages[0] if user_messages else '无'
+    last_assistant = assistant_messages[0] if assistant_messages else '无'
+
+    print(f'{{last_user}}|{{last_assistant}}')
+except Exception as e:
+    print(f'|')
+")
+
+    prompt_text=$(echo "$extract_result" | cut -d'|' -f1)
+    response_text=$(echo "$extract_result" | cut -d'|' -f2)
+else
+    prompt_text="Claude Code 响应完成"
+    response_text="AI 任务已完成"
+fi
+
+# 计算 duration（从 transcript 中提取时间戳）
+if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
+    duration=$(python3 -c "
+import json
+import sys
+
+try:
+    with open('$transcript_path', 'r') as f:
+        lines = f.readlines()
+
+    if len(lines) >= 2:
+        first_msg = json.loads(lines[0])
+        last_msg = json.loads(lines[-1])
+
+        first_time = first_msg.get('timestamp', 0)
+        last_time = last_msg.get('timestamp', 0)
+
+        if first_time and last_time and first_time < last_time:
+            duration = (last_time - first_time) / 1000  # 转换为秒
+            print(f'{{duration:.2f}}')
+        else:
+            print('5.0')
+    else:
+        print('5.0')
+except Exception as e:
+    print('5.0')
+")
+else
+    duration="5.0"
+fi
 
 # 导出环境变量并调用通知脚本
 export PROMPT="$prompt_text"

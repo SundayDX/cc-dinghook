@@ -146,12 +146,6 @@ def format_message(config, command="", response="", duration=0.0, working_dir=""
         f"{status_icon} **项目**: `{project_name}`",
     ]
 
-    # 显示用户输入（最多 300 字符）
-    if command and command != "Claude Code 响应完成":
-        user_display = command[:300] + '...' if len(command) > 300 else command
-        lines.append(f"📝 **用户输入**:")
-        lines.append(f"> {user_display}")
-
     # 显示 AI 响应摘要（最多 500 字符）
     if response and response != "AI 任务已完成":
         response_display = response[:500] + '...' if len(response) > 500 else response

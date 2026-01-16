@@ -282,7 +282,11 @@ def calc_duration(transcript_path: str):
                     except:
                         # 如果不是 ISO 格式，尝试作为数字处理
                         try:
-                            timestamps.append(float(ts))
+                            ts_float = float(ts)
+                            # 如果是毫秒级时间戳（大于 100 亿），转换为秒
+                            if ts_float > 10000000000:
+                                ts_float = ts_float / 1000.0
+                            timestamps.append(ts_float)
                         except:
                             pass
             except:

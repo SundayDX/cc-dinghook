@@ -232,29 +232,66 @@ def extract_from_transcript(transcript_path: str):
             return "无 (空文件)", "无"
 
         # Extract last user message (max 300 chars)
+        # 优先提取短消息，避免包含通知内容的长消息
         last_user = "无"
+        user_messages = []
+
         for line in reversed(lines):
             line = line.strip()
             if not line:
                 continue
             try:
                 msg = json.loads(line)
+                # 跳过 tool_result 类型的消息
+                if 'toolUseResult' in msg or 'tool_result' in msg:
+                    continue
                 # 支持多种用户消息类型
                 if msg.get('type') == 'user':
+                    # 检查是否是真正的用户消息（不是 tool_result）
+                    message = msg.get('message', {})
+                    # 如果 content 是列表且包含 tool_result，跳过
+                    content = message.get('content', '')
+                    if isinstance(content, list):
+                        # 检查列表中是否都是 tool_result
+                        has_tool_result = any(item.get('type') == 'tool_result' for item in content if isinstance(item, dict))
+                        if has_tool_result:
+                            continue
                     content = get_content(msg)
                     if content and content.strip():
-                        last_user = content[:300] + '...' if len(content) > 300 else content
-                    break
+                        user_messages.append(content)
+                        # 收集到 3 条后停止
+                        if len(user_messages) >= 3:
+                            break
                 # 也尝试直接从 content 字段提取（如果没有 type）
                 elif 'type' not in msg:
                     content = get_content(msg)
                     if content and isinstance(content, str) and content.strip():
-                        last_user = content[:300] + '...' if len(content) > 300 else content
-                        break
+                        user_messages.append(content)
+                        if len(user_messages) >= 3:
+                            break
             except json.JSONDecodeError:
                 continue
             except Exception:
                 continue
+
+        # 优先选择最短且不含通知标记的消息
+        # 真正的用户输入通常都是最短的
+        filtered_messages = []
+        for msg in user_messages:
+            # 跳过包含通知特征的消息
+            if 'Claude Code 执行完成' in msg or '🤖 AI 响应摘要' in msg or '✅ 项目:' in msg:
+                continue
+            # 跳过包含问号的消息（通常是用户在告诉我通知内容）
+            if '？' in msg or '?' in msg or '是否' in msg:
+                continue
+            filtered_messages.append(msg)
+
+        # 从过滤后的消息中选择最短的
+        if filtered_messages:
+            last_user = min(filtered_messages, key=len)
+        elif user_messages:
+            # 如果过滤后没有消息，使用最短的原始消息
+            last_user = min(user_messages, key=len)
 
         # Extract last 2 tool outputs as AI response summary (max 200 chars each)
         tool_summaries = []
@@ -335,7 +372,7 @@ from datetime import datetime
 
 def calc_duration(transcript_path: str):
     """
-    Calculate duration from transcript file
+    Calculate duration from transcript file (only last interaction)
     """
     try:
         with open(transcript_path, 'r') as f:
@@ -364,11 +401,18 @@ def calc_duration(transcript_path: str):
             except:
                 pass
 
+        # 只计算最近一次交互的耗时（取最后几个时间戳）
+        # 找到最后一个用户消息和最后一个时间戳的差值
         if len(timestamps) >= 2:
-            first_time = timestamps[0]
-            last_time = timestamps[-1]
+            # 取最后 20 个时间戳，代表最近的一次交互
+            recent_timestamps = timestamps[-20:] if len(timestamps) > 20 else timestamps
+            first_time = recent_timestamps[0]
+            last_time = recent_timestamps[-1]
             if first_time < last_time:
                 duration = (last_time - first_time)
+                # 如果计算出的时长超过 5 分钟，可能是整个会话时长，使用最后两个时间戳
+                if duration > 300:
+                    duration = timestamps[-1] - timestamps[-2] if len(timestamps) >= 2 else 5.0
                 print(f"{duration:.1f}")
                 return
 

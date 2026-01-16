@@ -287,11 +287,14 @@ def extract_from_transcript(transcript_path: str):
         # 真正的用户输入通常都是最短的
         filtered_messages = []
         for msg in user_messages:
-            # 跳过包含通知特征的消息
-            if 'Claude Code 执行完成' in msg or '🤖 AI 响应摘要' in msg or '✅ 项目:' in msg:
+            # 跳过包含通知特征的消息（不限于开头）
+            if 'Claude Code 执行完成' in msg or '🤖 AI 响应摘要' in msg or '✅ 项目:' in msg or '⏱️ 耗时:' in msg:
                 continue
             # 跳过包含问号的消息（通常是用户在告诉我通知内容）
             if '？' in msg or '?' in msg or '是否' in msg:
+                continue
+            # 跳过过长的消息（真正的用户输入通常很短）
+            if len(msg) > 50:
                 continue
             filtered_messages.append(msg)
 
@@ -299,8 +302,13 @@ def extract_from_transcript(transcript_path: str):
         if filtered_messages:
             last_user = min(filtered_messages, key=len)
         elif user_messages:
-            # 如果过滤后没有消息，使用最短的原始消息
-            last_user = min(user_messages, key=len)
+            # 如果过滤后没有消息，使用最短的原始消息（但限制长度）
+            shortest = min(user_messages, key=len)
+            # 如果最短的也超过 50 字符，只取前 50 字符
+            if len(shortest) > 50:
+                last_user = shortest[:50]
+            else:
+                last_user = shortest
 
         # Extract last 2 tool outputs as AI response summary (max 200 chars each)
         tool_summaries = []

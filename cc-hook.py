@@ -189,34 +189,83 @@ Extract user prompt and AI response summary from transcript
 import json
 import sys
 
+def get_content(msg):
+    """从消息中提取 content，支持多种格式"""
+    # 1. 直接的 content 字段
+    if 'content' in msg:
+        content = msg.get('content', '')
+    # 2. 嵌套在 message 对象中（Claude Code 实际格式）
+    elif 'message' in msg and isinstance(msg['message'], dict):
+        message = msg['message']
+        if 'content' in message:
+            content = message.get('content', '')
+        else:
+            return None
+    else:
+        return None
+
+    if isinstance(content, str):
+        return content
+    elif isinstance(content, list):
+        # 处理 content 为列表的情况（如 text 块）
+        texts = []
+        for item in content:
+            if isinstance(item, dict):
+                if item.get('type') == 'text':
+                    texts.append(item.get('text', ''))
+                elif 'text' in item:
+                    texts.append(item.get('text', ''))
+            elif isinstance(item, str):
+                texts.append(item)
+        return ' '.join(texts) if texts else None
+    return None
+
 def extract_from_transcript(transcript_path: str):
     """
     Extract last user message and AI response summary from transcript
     """
     try:
-        with open(transcript_path, 'r') as f:
+        with open(transcript_path, 'r', encoding='utf-8') as f:
             lines = f.readlines()
+
+        if not lines:
+            return "无 (空文件)", "无"
 
         # Extract last user message (max 300 chars)
         last_user = "无"
         for line in reversed(lines):
+            line = line.strip()
+            if not line:
+                continue
             try:
                 msg = json.loads(line)
+                # 支持多种用户消息类型
                 if msg.get('type') == 'user':
-                    content = msg.get('content', '')
-                    if content:
+                    content = get_content(msg)
+                    if content and content.strip():
                         last_user = content[:300] + '...' if len(content) > 300 else content
                     break
-            except:
-                pass
+                # 也尝试直接从 content 字段提取（如果没有 type）
+                elif 'type' not in msg:
+                    content = get_content(msg)
+                    if content and isinstance(content, str) and content.strip():
+                        last_user = content[:300] + '...' if len(content) > 300 else content
+                        break
+            except json.JSONDecodeError:
+                continue
+            except Exception:
+                continue
 
         # Extract last 2 tool outputs as AI response summary (max 200 chars each)
         tool_summaries = []
         for line in reversed(lines):
+            line = line.strip()
+            if not line:
+                continue
             try:
                 msg = json.loads(line)
                 if msg.get('type') == 'tool_result':
-                    tool_name = msg.get('tool_name', '')
+                    tool_name = msg.get('tool_name', 'Unknown')
                     # tool_output 可能在不同位置
                     tool_output = msg.get('tool_output', {})
                     output_text = ''
@@ -226,21 +275,44 @@ def extract_from_transcript(transcript_path: str):
                     elif isinstance(tool_output, str):
                         output_text = tool_output
 
-                    if tool_name and output_text:
-                        summary = output_text[:200] + '...' if len(output_text) > 200 else output_text
+                    if output_text and str(output_text).strip():
+                        summary = str(output_text)[:200] + '...' if len(str(output_text)) > 200 else str(output_text)
                         tool_summaries.append(f"[{tool_name}] {summary}")
                         if len(tool_summaries) >= 2:
                             break
-            except:
-                pass
+            except json.JSONDecodeError:
+                continue
+            except Exception:
+                continue
+
+        # 如果没有找到 tool_result，尝试找其他类型的响应
+        if not tool_summaries:
+            for line in reversed(lines):
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    msg = json.loads(line)
+                    # 尝试提取 assistant 类型的消息
+                    if msg.get('type') in ['assistant', 'response']:
+                        content = get_content(msg)
+                        if content:
+                            text = str(content)[:500]
+                            if text:
+                                tool_summaries.append(f"[AI] {text}")
+                                break
+                except:
+                    continue
 
         # 使用 chr(10) 代表换行符
         last_assistant = chr(10).join(tool_summaries) if tool_summaries else "无"
 
         return last_user, last_assistant
 
+    except FileNotFoundError:
+        return "无 (文件不存在)", "无"
     except Exception as e:
-        return "无", "无"
+        return f"无 (错误: {str(e)[:50]})", "无"
 
 
 if __name__ == '__main__':

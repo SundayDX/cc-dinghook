@@ -414,6 +414,22 @@ input_data=$(cat)
 cwd=$(echo "$input_data" | python3 -c "import json, sys; data = json.load(sys.stdin); print(data.get('cwd', ''))")
 transcript_path=$(echo "$input_data" | python3 -c "import json, sys; data = json.load(sys.stdin); print(data.get('transcript_path', ''))")
 
+# 等待 transcript 文件写入完成（最多等待 2 秒）
+if [ -n "$transcript_path" ]; then
+    for i in $(seq 1 10); do
+        if [ -f "$transcript_path" ]; then
+            # 检查文件是否稳定（大小在 100ms 内不变）
+            current_size=$(stat -f%z "$transcript_path" 2>/dev/null || stat -c%s "$transcript_path" 2>/dev/null || echo "0")
+            sleep 0.1
+            new_size=$(stat -f%z "$transcript_path" 2>/dev/null || stat -c%s "$transcript_path" 2>/dev/null || echo "0")
+            if [ "$current_size" = "$new_size" ] && [ "$current_size" -gt 0 ]; then
+                break
+            fi
+        fi
+        sleep 0.2
+    done
+fi
+
 # 提取用户 prompt 和 AI 响应摘要
 if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
     # 使用单独的 Python 脚本提取信息

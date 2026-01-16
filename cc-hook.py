@@ -189,8 +189,13 @@ Extract user prompt and AI response summary from transcript
 import json
 import sys
 
-def get_content(msg):
-    """从消息中提取 content，支持多种格式"""
+def get_content(msg, first_only=False):
+    """从消息中提取 content，支持多种格式
+
+    Args:
+        msg: 消息对象
+        first_only: 是否只返回第一个文本块（用于用户输入）
+    """
     # 1. 直接的 content 字段
     if 'content' in msg:
         content = msg.get('content', '')
@@ -217,6 +222,9 @@ def get_content(msg):
                     texts.append(item.get('text', ''))
             elif isinstance(item, str):
                 texts.append(item)
+            # 如果只需要第一个，找到后立即返回
+            if first_only and texts:
+                return texts[0]
         return ' '.join(texts) if texts else None
     return None
 
@@ -256,7 +264,8 @@ def extract_from_transcript(transcript_path: str):
                         has_tool_result = any(item.get('type') == 'tool_result' for item in content if isinstance(item, dict))
                         if has_tool_result:
                             continue
-                    content = get_content(msg)
+                    # 只提取第一个文本块，避免合并多个内容
+                    content = get_content(msg, first_only=True)
                     if content and content.strip():
                         user_messages.append(content)
                         # 收集到 3 条后停止
@@ -264,7 +273,7 @@ def extract_from_transcript(transcript_path: str):
                             break
                 # 也尝试直接从 content 字段提取（如果没有 type）
                 elif 'type' not in msg:
-                    content = get_content(msg)
+                    content = get_content(msg, first_only=True)
                     if content and isinstance(content, str) and content.strip():
                         user_messages.append(content)
                         if len(user_messages) >= 3:
@@ -458,9 +467,9 @@ input_data=$(cat)
 cwd=$(echo "$input_data" | python3 -c "import json, sys; data = json.load(sys.stdin); print(data.get('cwd', ''))")
 transcript_path=$(echo "$input_data" | python3 -c "import json, sys; data = json.load(sys.stdin); print(data.get('transcript_path', ''))")
 
-# 等待 transcript 文件写入完成（最多等待 2 秒）
+# 等待 transcript 文件写入完成（最多等待 5 秒）
 if [ -n "$transcript_path" ]; then
-    for i in $(seq 1 10); do
+    for i in $(seq 1 25); do
         if [ -f "$transcript_path" ]; then
             # 检查文件是否稳定（大小在 100ms 内不变）
             current_size=$(stat -f%z "$transcript_path" 2>/dev/null || stat -c%s "$transcript_path" 2>/dev/null || echo "0")

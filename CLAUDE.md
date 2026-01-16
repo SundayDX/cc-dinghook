@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-CC-DingHook is a global DingTalk notification tool for Claude Code. It automatically sends DingTalk notifications after each Claude Code response completes, allowing users to stay informed without constantly switching windows.
+CC-DingHook is a global DingTalk notification tool for Claude Code. It automatically sends DingTalk notifications after each Claude Code response completes via the Stop Hook mechanism.
 
 ## Key Commands
 
@@ -31,74 +31,84 @@ cc-hook config --show
 ```bash
 # Run the hook script directly
 python3 cc-hook.py --help
-
-# Build TypeScript definitions (if modified)
-npm run build
-
-# Run tests
-npm test
-```
-
-### Utility Scripts
-```bash
-# Extract messages from transcript
-python3 src/extract_messages.py <transcript_path>
-
-# Calculate duration from transcript
-python3 src/calc_duration.py <transcript_path>
 ```
 
 ## Architecture
 
-### Hook System
+### Stop Hook Integration
 The tool integrates with Claude Code via the Stop Hook mechanism:
 
-1. **Hook Location**: `~/.claude/hooks/stop`
+1. **Hook Location**: `~/.claude/hooks/stop` (configured in `~/.claude/settings.json`)
 2. **Trigger**: After each Claude Code response completes
 3. **Input**: JSON via stdin containing `cwd` and `transcript_path`
-4. **Flow**:
-   - Extract user prompt and AI response from transcript using `extract_messages.py`
-   - Calculate execution duration using `calc_duration.py`
-   - Send notification via `cc-hook send`
+4. **Output**: Sends notification via `cc-hook send` command
+
+### Hook Script Flow
+The Stop hook script (`~/.claude/hooks/stop`) is a bash script that:
+1. Reads JSON from stdin with `cwd` and `transcript_path`
+2. Calls `extract_messages.py` to parse the transcript (outputs `prompt|response`)
+3. Calls `calc_duration.py` to calculate execution time
+4. Invokes `cc-hook send` with extracted data
 
 ### Configuration System
 - **Location**: `~/.cc-hook-config.json`
 - **Managed by**: `cc-hook config` command
-- **Key settings**:
-  - `access_token`: DingTalk webhook token
-  - `secret`: HMAC-SHA256 signing key (optional but recommended)
-  - `enabled`: Master switch for notifications
-  - `message_template`: Customize notification content
-  - `notifications`: Filter by success/failure/error
+- **Default config**: Merges user config with `DEFAULT_CONFIG` in `cc-hook.py`
+- **Backward compatibility**: Supports legacy `webhook_url` format (extracts token from URL)
 
 ### Message Extraction
-The `src/extract_messages.py` script parses Claude Code's transcript JSONL format:
+The `extract_messages.py` script (embedded in `cc-hook.py:setup_hook()`) parses Claude Code's transcript JSONL format:
 - Extracts the last user message (max 300 chars)
-- Extracts the last 2 tool outputs as AI response summary (max 200 chars each)
+- Extracts up to 2 tool outputs as AI response summary (max 200 chars each)
 - Output format: `prompt|assistant` (pipe-delimited)
+- Uses `chr(10)` for newlines to avoid shell escaping issues
+
+### Duration Calculation
+The `calc_duration.py` script (embedded in `cc-hook.py:setup_hook()`):
+- Parses ISO 8601 timestamps from transcript `timestamp` fields
+- Calculates: `last_timestamp - first_timestamp`
+- Falls back to `5.0` seconds on error
 
 ### DingTalk Integration
-- **API**: DingTalk Custom Webhook
+- **API**: DingTalk Custom Webhook (`https://oapi.dingtalk.com/robot/send`)
 - **Message Type**: Markdown
-- **Security**: Supports HMAC-SHA256 signature verification
-- **Fallback**: Gracefully handles network errors and missing configuration
-
-### Dual-Language Architecture
-- **Python**: Core functionality (main script, hook handlers, utilities)
-- **TypeScript**: Type definitions for future Node.js integration
-- The two codebases share the same data structures (see `src/types.ts`)
+- **Security**: Supports HMAC-SHA256 signature verification (timestamp + sign)
+- **Message formatting**: `format_message()` builds markdown with status icons, user input, AI response summary
 
 ## Important Implementation Details
 
-1. **Transcript Parsing**: The transcript file contains JSONL (one JSON object per line). Messages have `type` field (`user`, `tool_result`, etc.)
+### Script Embedding Pattern
+The `install` command embeds helper scripts directly into the generated hook files to avoid external dependencies:
+- `extract_messages.py` content is embedded as a heredoc in `setup_hook()`
+- `calc_duration.py` content is embedded as a heredoc in `setup_hook()`
+- These are written to `~/.claude/hooks/extract_messages.py` and `calc_duration.py` during installation
 
-2. **Stop Hook Data**: Claude Code passes JSON via stdin with `cwd` and `transcript_path` fields. The hook script must read from stdin.
+### Transcript Format
+Claude Code's transcript file is JSONL (one JSON object per line):
+- Each line has a `type` field: `user`, `tool_result`, etc.
+- User messages: `type: "user"` with `content` field
+- Tool results: `type: "tool_result"` with `tool_name` and `tool_output` fields
+- `tool_output` can be a dict (with `output` key) or string
 
-3. **Duration Calculation**: The `calc_duration.py` script has a bug in line 19 (`for line in f:` should be `for line in lines:`). It returns a default of 5.0 seconds on error.
-
-4. **Security**: Configuration files should have 600 permissions. The script supports backward compatibility with legacy `webhook_url` config.
-
-5. **Hook Installation**: The `install` command copies utility scripts to `~/.claude/hooks/` and creates the main stop hook script.
+### Settings.json Integration
+The `install` command automatically updates `~/.claude/settings.json`:
+```json
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/user/.claude/hooks/stop",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
+```
 
 ## Configuration Structure
 

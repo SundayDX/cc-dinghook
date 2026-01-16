@@ -411,54 +411,6 @@ exec python3 "$HOME/.local/bin/cc-hook" send --prompt "$PROMPT" --response "$RES
     except Exception as e:
         print(f"❌ Hook 安装失败: {e}")
         return False
-    
-    try:
-        with open(hook_script, 'w', encoding='utf-8') as f:
-            f.write(script_content)
-        
-        hook_script.chmod(0o755)
-
-        # 在 settings.json 中添加 hooks 配置
-        settings_file = Path.home() / ".claude" / "settings.json"
-        try:
-            # 读取现有的 settings.json
-            if settings_file.exists():
-                with open(settings_file, 'r', encoding='utf-8') as f:
-                    settings = json.load(f)
-            else:
-                settings = {}
-
-            # 添加 hooks 配置
-            if 'hooks' not in settings:
-                settings['hooks'] = {}
-
-            settings['hooks']['Stop'] = [
-                {
-                    "hooks": [
-                        {
-                            "type": "command",
-                            "command": str(hook_script),
-                            "timeout": 10
-                        }
-                    ]
-                }
-            ]
-
-            # 保存 settings.json
-            with open(settings_file, 'w', encoding='utf-8') as f:
-                json.dump(settings, f, indent=2, ensure_ascii=False)
-            print(f"✅ 已在 settings.json 中配置 hooks: {settings_file}")
-        except Exception as e:
-            print(f"⚠️  配置 settings.json 失败: {e}")
-            print("请手动在 ~/.claude/settings.json 中添加 hooks 配置")
-
-        print(f"✅ Hook 已安装到: {hook_script}")
-        print("📝 已自动配置全局 hooks，请重启 Claude Code")
-        return True
-        
-    except Exception as e:
-        print(f"❌ Hook 安装失败: {e}")
-        return False
 
 
 def install_command():
@@ -476,20 +428,6 @@ def install_command():
     config = load_config()
     print(f"✅ 配置文件已创建: {CONFIG_PATH}")
     
-    if setup_hook():
-        print("\n🎉 安装完成！")
-        print(f"📋 配置文件位置: {CONFIG_PATH}")
-        print("🔧 您可以编辑配置文件来自定义通知内容")
-        print("\n⚠️  请在 Claude Code 设置中启用 Stop hook")
-        return True
-    else:
-        return False
-    
-    # 创建配置文件
-    config = load_config()
-    print(f"✅ 配置文件已创建: {CONFIG_PATH}")
-    
-    # 安装 hook
     if setup_hook():
         print("\n🎉 安装完成！")
         print(f"📋 配置文件位置: {CONFIG_PATH}")
